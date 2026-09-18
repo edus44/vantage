@@ -30,6 +30,8 @@ import {
   FolderGit2,
   PanelLeftClose,
   List,
+  Expand,
+  Shrink,
 } from "lucide-react";
 // History icon retained for the file-history link in the breadcrumb area.
 import { RelativeTime } from "../components/RelativeTime";
@@ -207,6 +209,14 @@ export const ViewerPage: React.FC = () => {
   const [tocOpen, setTocOpen] = useState(() => {
     try {
       return localStorage.getItem("vantage:tocOpen") === "true";
+    } catch {
+      return false;
+    }
+  });
+  // Whether the document uses the whole window instead of a measured column.
+  const [fullWidth, setFullWidth] = useState(() => {
+    try {
+      return localStorage.getItem("vantage:fullWidth") === "true";
     } catch {
       return false;
     }
@@ -686,6 +696,17 @@ export const ViewerPage: React.FC = () => {
       return next;
     });
   }, []);
+  const handleToggleFullWidth = useCallback(() => {
+    setFullWidth((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("vantage:fullWidth", String(next));
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
   const handleShortcutNavigate = useCallback(
     (path: string) => {
       navigate(path);
@@ -1098,6 +1119,24 @@ export const ViewerPage: React.FC = () => {
                     title={tocOpen ? "Hide contents" : "Show contents"}
                   >
                     <List size={18} />
+                  </button>
+                )}
+                {showSidebar && (
+                  <button
+                    onClick={handleToggleFullWidth}
+                    className={cn(
+                      "hidden md:block p-1.5 rounded-md shrink-0 transition-colors cursor-pointer",
+                      fullWidth
+                        ? "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30"
+                        : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700",
+                    )}
+                    aria-label={
+                      fullWidth ? "Use fixed width" : "Use full width"
+                    }
+                    aria-pressed={fullWidth}
+                    title={fullWidth ? "Use fixed width" : "Use full width"}
+                  >
+                    {fullWidth ? <Shrink size={18} /> : <Expand size={18} />}
                   </button>
                 )}
                 <nav className="flex items-center text-sm space-x-1 min-w-0 overflow-hidden">
@@ -1547,10 +1586,14 @@ export const ViewerPage: React.FC = () => {
                   // width plus the gap keeps the column of prose the same
                   // measure either way.
                   //
-                  // The gap is 3rem because every prose heading hangs 1.5em into
+                  // The gap is 3rem because every prose heading hangs 1.5em
                   // into its left margin to park the `#` anchor there, and at
                   // h1's 2em that is 48px of box reaching towards it.
-                  tocOpen && tocAvailable ? "max-w-[80rem]" : "max-w-5xl",
+                  fullWidth
+                    ? "max-w-none"
+                    : tocOpen && tocAvailable
+                      ? "max-w-[80rem]"
+                      : "max-w-5xl",
                 )}
               >
                 <TableOfContents
