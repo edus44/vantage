@@ -1,8 +1,8 @@
 import { test, expect } from "@playwright/test";
 
-// The table of contents in a real browser: jsdom lays nothing out, so "it
-// sits beside the text" and "clicking an entry scrolls" are only answerable
-// here.
+// The table of contents and the width toggle, in a real browser: jsdom lays
+// nothing out, so "it sits beside the text" and "clicking an entry scrolls"
+// are only answerable here.
 test.describe("table of contents", () => {
   test("toggles, lists the headings, and scrolls to one", async ({ page }) => {
     await page.goto("/mermaid-diagrams-test.md");
@@ -93,5 +93,65 @@ test.describe("table of contents", () => {
     await expect
       .poll(async () => (await toc.boundingBox())!.y)
       .toBeLessThan(tocBox.y + 40);
+  });
+});
+
+test.describe("full width", () => {
+  test("recalculates the active heading when full width changes the layout", async ({
+    page,
+  }) => {
+    // Wide enough that toggling full width visibly reflows the text — on a
+    // narrow viewport the fixed column and full width render identically.
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto("/mermaid-diagrams-test.md");
+    await page.getByRole("button", { name: "Show contents" }).click();
+
+    const scroller = page.locator("[data-content-scroll]");
+    await scroller.evaluate((el) =>
+      el.scrollTo({ top: (el.scrollHeight - el.clientHeight) / 2 }),
+    );
+    const before = await page
+      .getByTestId("table-of-contents")
+      .locator("[aria-current]")
+      .innerText();
+
+    // Toggling full width reflows every heading below the fold without
+    // touching the DOM tree — nothing is inserted, removed or scrolled — so
+    // this is the case a plain MutationObserver on childList alone would
+    // miss entirely.
+    await page.getByRole("button", { name: "Use full width" }).click();
+
+    await expect
+      .poll(() =>
+        page
+          .getByTestId("table-of-contents")
+          .locator("[aria-current]")
+          .innerText(),
+      )
+      .not.toBe(before);
+  });
+
+  test("widens the document and is remembered", async ({ page }) => {
+    // Wider than the fixed column, or there is nothing for full width to add.
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto("/mermaid-diagrams-test.md");
+    const heading = page.locator("h1").first();
+    const fixed = (await heading.boundingBox())!.width;
+
+    await page.getByRole("button", { name: "Use full width" }).click();
+    await expect
+      .poll(async () => (await heading.boundingBox())!.width)
+      .toBeGreaterThan(fixed);
+
+    await page.reload();
+    await expect(
+      page.getByRole("button", { name: "Use fixed width" }),
+    ).toBeVisible();
+    expect((await heading.boundingBox())!.width).toBeGreaterThan(fixed);
+
+    await page.getByRole("button", { name: "Use fixed width" }).click();
+    await expect
+      .poll(async () => (await heading.boundingBox())!.width)
+      .toBe(fixed);
   });
 });
